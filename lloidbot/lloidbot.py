@@ -22,6 +22,20 @@ poll_sleep_interval = 5
 logger = logging.getLogger('lloid')
 
 messages = {
+    social_manager.Action.CONFIRM_LISTING_POSTED:
+        "Okay! Please be responsible and message \"**close**\" to indicate when you've closed. "
+        "You can update the dodo code with the normal syntax. \n\n"
+        "Messaging me \"**pause**\" will extend the cooldown timer by {cooldown} "
+        "minutes each time. This stacks, so if you want me to wait {double_cooldown} minutes, "
+        "just message me pause twice, and so on.\n\n"
+        "You can also let the next person in and reset the timer to normal by messaging me \"**next**\".\n"
+        "To edit the listing, simply send the same command with the updated info. If all you're changing is "
+        "your dodo code, `host price xdodo` will suffice. Nobody will have to requeue to receive updated codes, "
+        "but they'll have to reach out to you if you changed your code after they received an old one.",
+    social_manager.Action.POST_LISTING:
+        ">>> **{name}** has turnips selling for **{current_price}**. "
+        'Local time: **{current_time}**. '
+        "React to this message with 🦝 to be queued up for a code. {desc}",
     social_manager.Action.CONFIRM_LISTING_UPDATED: 
         "Updated your info. Anyone still in line will get the updated codes.",
     social_manager.Action.CONFIRM_QUEUED:
@@ -87,15 +101,15 @@ class GeneralCommands(commands.Cog):
 # dict, in that order of priority.
 # The optional params argument is a dict of the keywords that are required 
 # to format the message. 
-# The optional on_sent argument is a callback that is executed upon success
+# The optional on_sent argument is an async callback that is executed upon success
 # of the message sending. It passes the Discord message object, as well as
 # the message tuple that was just processed.
-# The optional on_fail argument is a callback that is executed when an exception
+# The optional on_fail argument is an async callback that is executed when an exception
 # occurs during message sending--for instance, if the channel blocks messages.
 # It passes the error as well as the message tuple that errored out.
 # All messages in the list are guaranteed to be processed by Lloid in order,
 # although variable issues such as users' internet speeds and Discord's backend
-# mean that messages sent at around the same time may not be received in order.
+# mean that near-simultaneous messages may not be received in order.
 def sends_messages(fn):
     @wraps(fn)
     async def decorator(*args, **kwargs):
@@ -103,7 +117,7 @@ def sends_messages(fn):
 
         for message in messages_to_send:
             channel, message_key = message[:2]
-            message_params = None
+            message_params = {}
             on_sent = None
             on_fail = None
             if len(message) > 2:
@@ -122,10 +136,10 @@ def sends_messages(fn):
                 else:
                     logger.warning(f"Tried to send message, but key was not found: {message_key}")
                 if on_sent is not None:
-                    on_sent(msg, message)
+                    await on_sent(msg, message)
             except Exception as err:
                 if on_fail is not None:
-                    on_fail(err, message)
+                    await on_fail(err, message)
         return messages_to_send
 
     return decorator
@@ -270,14 +284,55 @@ class DMCommands(commands.Cog):
                 "If you think the island is congested, please tell the host to pause with the same command you just sent.")
     
     @commands.command(name='host')
-    @lloid_command
+    @sends_messages
     async def host(self, ctx, price: int, dodo, tz: typing.Optional[int], *, description = None):
         # This check can probably be converted into a discord.py command check, but it's only used for one command at the moment.
         if not re.match(r'[A-HJ-NP-Y0-9]{5}', dodo, re.IGNORECASE):
             await ctx.send(f"This dodo code appears to be invalid. Please make sure to check the length and characters used.")
             return
 
-        return self.bot.social_manager.post_listing(ctx.author.id, ctx.author.name, price, description, dodo, tz)
+        actions = self.bot.social_manager.post_listing(ctx.author.id, ctx.author.name, price, description, dodo, tz)
+        to_send = []
+        for action in actions:
+            status = action[0]
+            if status == social_manager.Action.CONFIRM_LISTING_POSTED:
+                cooldown = queue_interval_minutes
+                double_cooldown = queue_interval_minutes*2
+                to_send += [(ctx, status, locals())]
+            elif status == social_manager.Action.POST_LISTING:
+                owner_id, price, description, time = action[1:]
+                
+                turnip = self.bot.market.get(ctx.author.id)
+                name = turnip.name
+                current_price = turnip.current_price()
+                current_time = turnip.current_time().strftime("%a, %I:%M %p")
+                
+                desc = ""
+                if description is not None and description.strip() != "":
+                    self.bot.descriptions[ctx.author.id] = description
+                    desc = f"\n**{ctx.author.name}** adds: {description}"
+
+                async def on_sent(msg, params):
+                    await msg.add_reaction('🦝')
+                    self.bot.associated_user[msg.id] = ctx.author.id
+                    self.bot.associated_message[ctx.author.id] = msg
+
+                to_send += [(self.bot.report_channel, status, locals(), on_sent)]
+
+            elif status == social_manager.Action.CONFIRM_LISTING_UPDATED:
+                to_send += [(ctx, status)]
+            elif status == social_manager.Action.UPDATE_LISTING:
+                owner_id, current_price, desc, time = action[1:]
+                if owner_id in self.bot.associated_message:
+                    msg = self.bot.associated_message[owner_id]
+                    current_time = time.strftime("%a, %I:%M %p")
+                    name = ctx.author.name
+
+                    await msg.edit(content=messages[social_manager.Action.POST_LISTING].format(**locals()))
+                else:
+                    logger.error(f"{ctx.author.name} tried to update a listing that doesn't exist anymore.")
+
+        return to_send
     
     @host.error
     async def host_error(self, ctx, error):
@@ -390,10 +445,6 @@ class Lloid(commands.Bot):
             waiting_for = self.market.queue.requesters[payload.user_id]
             if waiting_for == self.associated_user[payload.message_id] and self.market.forfeit(payload.user_id):
                 await user.send("Removed you from the queue for %s." % owner_name)
-
-    @lloid_command
-    async def queue_user(self, message_id, user):
-        return 
 
     async def on_disconnect(self):
         logger.warning("Lloid got disconnected.")
