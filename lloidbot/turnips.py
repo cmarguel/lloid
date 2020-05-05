@@ -189,6 +189,7 @@ class Status(enum.Enum):
     QUEUE_EMPTY = 8
     ALREADY_QUEUED = 9
     NO_SUCH_QUEUE  = 10
+    DODO_INCORRECT_FORMAT = 11
 
 class Queue:
     def __init__(self, market):

@@ -1,5 +1,6 @@
 import inspect
 import discord
+import enum
 from discord.utils import get
 from discord.ext import commands
 import sqlite3
@@ -49,18 +50,21 @@ messages = {
 }
 
 errors = {
-    queue_manager.Status.DODO_REQUIRED: 
+    turnips.Status.DODO_REQUIRED: 
         "This seems to be your first time setting turnips, so you'll need to provide "
         "both a dodo code and a GMT offset (just a positive or negative integer). "
         "The price can be a placeholder if you want.",
-    queue_manager.Status.TIMEZONE_REQUIRED: 
+    turnips.Status.TIMEZONE_REQUIRED: 
         "This seems to be your first time setting turnips, so you'll need to provide "
         "both a dodo code and a GMT offset (just a positive or negative integer). "
         "The price can be a placeholder if you want.",
-    queue_manager.Status.PRICE_REQUIRED:
+    turnips.Status.PRICE_REQUIRED:
         "You'll need to tell us how much the turnips are at least.",
+    # look into this, it may have the same error values as something else
     queue_manager.Error.ALREADY_QUEUED:
-        "You seem to already be in line somewhere."
+        "You seem to already be in line somewhere.",
+    turnips.Status.DODO_INCORRECT_FORMAT: 
+        "This dodo code appears to be invalid. Please make sure to check the length and characters used."
 }
 
 class GeneralCommands(commands.Cog):
@@ -288,8 +292,7 @@ class DMCommands(commands.Cog):
     async def host(self, ctx, price: int, dodo, tz: typing.Optional[int], *, description = None):
         # This check can probably be converted into a discord.py command check, but it's only used for one command at the moment.
         if not re.match(r'[A-HJ-NP-Y0-9]{5}', dodo, re.IGNORECASE):
-            await ctx.send(f"This dodo code appears to be invalid. Please make sure to check the length and characters used.")
-            return
+            return [(ctx, turnips.Status.DODO_INCORRECT_FORMAT)]
 
         actions = self.bot.social_manager.post_listing(ctx.author.id, ctx.author.name, price, description, dodo, tz)
         to_send = []
@@ -338,7 +341,6 @@ class DMCommands(commands.Cog):
     async def host_error(self, ctx, error):
         logger.info(f"Invalid command received: {ctx.message.content}")
         logger.info(error)
-        await ctx.send("** If you've used this bot before, note that the syntax has changed slightly.**")
         await ctx.send("Usage: \"host [price] [optional dodo code] [optional gmt offset--an integer such as -5 or 8] [optional description, markdown supported]\"\n\n "
                 "The quotes (\") and square brackets ([]) are **not** part of the input!\n\n"
                 "Example usage: `host 123 C0FEE 8 Brewster is in town selling infinite durability axes`\n\n "
