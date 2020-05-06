@@ -1,4 +1,6 @@
 # lloid
+[![Build Status](https://travis-ci.org/cmarguel/lloid.svg?branch=refactor)](https://travis-ci.org/robwiss/lloid)
+
 A turnip tracker for Discord
 
 I hacked this together quickly so that we'd be ready for the turnip rush later this week. It lets Discord users declare your turnip price, so that people can queue up for visits. There's a delay between codes being handed out, so it's perfect if you have a ton of people clamoring to get into your town.
@@ -17,7 +19,7 @@ Running:
 5. Run `python -m lloidbot`
 
 Testing:
-Run `python -m unittest`.
+Run `pytest`
 
 Tweaking:
 I haven't made this thing highly configurable but you can change the queue delay time by changing the env variable `QUEUE_INTERVAL` to the number of seconds you want.

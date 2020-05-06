@@ -2,3 +2,5 @@ discord.py
 python-dotenv
 sentry_sdk
 freezegun
+pytest
+
