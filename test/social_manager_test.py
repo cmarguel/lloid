@@ -157,7 +157,7 @@ class TestSocialManager(unittest.TestCase):
         self.manager.reaction_added(3, alice.id)
 
         res = self.manager.host_next(alice.id)
-        assert (Action.ARRIVAL_ALERT, alice.id, 1) in res
+        assert (Action.ARRIVAL_ALERT, alice.id, 1) in res, res
         assert (Action.BOARDING_MESSAGE, 1, alice.id, alice.dodo) in res
 
         res = self.manager.host_next(alice.id)

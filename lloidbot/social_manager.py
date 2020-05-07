@@ -12,83 +12,6 @@ poll_sleep_interval = 5
 
 logger = logging.getLogger('lloid')
 
-# This class should manage the queuing on the abstract idea of a social platform 
-# (discord, IRC, etc). Currently, we assume a Discord-like featureset, but we
-# should make sure to handle cases where the platform doesn't support things--eg:
-# IRC won't let you delete messages, or react to them.
-# This should map actions taken on a platform (eg: reaction) to the command the 
-# action is intended to represent (eg: queue up).
-# We'll figure this next part out later, but this class may not actually belong 
-# here as in the ideal case, the bot shouldn't have to wait for the caller to provide
-# it with a message id--which it needs to perform its duty.
-#
-# It should receive actions from the queue manager and translate them into message actions
-# that the caller can perform. 
-# eg: call_next -> host_next -> (CODE_DISPENSED) -> 
-#     return [SEND_CODE (to guest), SEND_WARNING (to next guest), SEND_NOTIFICATION (to host)]
-class SocialManager:
-    def __init__(self, queueManager):
-        self.queueManager = queueManager
-
-    def post_listing(self, user_id, name, price, description=None, dodo=None, tz=None, chan=None):
-        out = []
-        res = self.queueManager.declare(user_id, name, price, dodo, tz, description)
-        for r in res:
-            status, *params = r
-            if status == queue_manager.Action.LISTING_ACCEPTED:
-                turnip = params[0]
-                out += [(Action.CONFIRM_LISTING_POSTED, user_id)]
-                out += [(Action.POST_LISTING, user_id, price, description, turnip.current_time())]
-            elif status == queue_manager.Action.LISTING_UPDATED:
-                turnip = params[0]
-                out += [(Action.CONFIRM_LISTING_UPDATED, user_id)]
-                out += [(Action.UPDATE_LISTING, turnip.id, turnip.current_price(), turnip.description, turnip.current_time())]
-            elif status == queue_manager.Action.NOTHING:
-                out += [(Action.ACTION_REJECTED, params[0])]
-            else:
-                logger.warning(f"""Posting the following listing resulted in a status of {status.name}. """
-                                f"""Arguments given to the listing were: {user_id} | {name} | {description} | {price} | {dodo} | {tz} | {chan} """) 
-
-        return out
-
-    def register_message(self, user_id, message_id):
-        pass
-
-    def host_next(self, host_id):
-        # Currently next batch is just one person, but in the future we may accomodate more per `next`.
-        to_send = []
-        next_batch = self.queueManager.host_next(host_id)
-        for res in next_batch:
-            st = res[0]
-            if st == queue_manager.Action.POPPED_FROM_QUEUE:
-                guest, owner = res[1:]
-                to_send += [(Action.ARRIVAL_ALERT, owner.id, guest.id)]
-                to_send += [(Action.BOARDING_MESSAGE, guest.id, owner.id, owner.dodo)]
-            elif st == queue_manager.Action.NOTHING:
-                to_send += [(Action.ACTION_REJECTED, res[1])]
-        return to_send
-
-    def host_close(self, host_id):
-        res = self.queueManager.close(host_id)
-        out = []
-        for r in res:
-            st = r[0]
-            if st == queue_manager.Action.NOTHING:
-                return [(Action.ACTION_REJECTED, r[1])]
-            if st == queue_manager.Action.QUEUE_CLOSED:
-                host, remainder = r[1:]
-                out += [(Action.CONFIRM_CLOSED, host, remainder)]
-                for guest in remainder:
-                    out += [(Action.APOLOGY_CLOSED, guest.id, host)]
-        return out
-
-    def reaction_added(self, user_id, host_id):
-        out = []
-        res = self.queueManager.visitor_request_queue(user_id, host_id)
-        for action, p in res:
-            if action == queue_manager.Action.ADDED_TO_QUEUE:
-                out += [(Action.CONFIRM_QUEUED, user_id, host_id, p)]
-        return out
 
 # These actions are values that will be returned by social manager, and represent
 # actions that the caller should take upon receiving the result. These actions
@@ -112,6 +35,133 @@ class Action(enum.Enum):
     ARRIVAL_ALERT = 9 # host id, guest id
     CONFIRM_CLOSED = 10 # host id, [remaining guests]
     APOLOGY_CLOSED = 11 # guest_id, host id
+
+# This might seem redundant, but the intention here is for me to not screw up the payload,
+# by forcing the interpreter to catch when I forgot or included too many arguments.
+class ResultBuilder:
+    def __init__(self):
+        self.out = []
+    
+    def add(self, *args):
+        self.out += [args]
+
+    def action_rejected(self, reason):
+        self.add(Action.ACTION_REJECTED, reason)
+
+    def info(self, requestedInfo):
+        self.add(Action.INFO, requestedInfo)
+    
+    def confirm_listing_posted(self, owner_id):
+        self.add(Action.CONFIRM_LISTING_POSTED, owner_id)
+    
+    def post_listing(self, owner_id, price, description, current_time):
+        self.add(Action.POST_LISTING, owner_id, price, description, current_time)
+
+    def confirm_listing_updated(self, owner_id):
+        self.add(Action.CONFIRM_LISTING_UPDATED, owner_id)
+
+    def update_listing(self, owner_id, price, description, current_time):
+        self.add(Action.UPDATE_LISTING, owner_id, price, description, current_time)
+    
+    def confirm_queued(self, guest_id, owner_id, queueAhead):
+        self.add(Action.CONFIRM_QUEUED, guest_id, owner_id, queueAhead)
+
+    def warning_message(self, guest_id, owner_id):
+        self.add(Action.WARNING_MESSAGE, guest_id, owner_id)
+
+    def boarding_message(self, guest_id, owner_id, dodo):
+        self.add(Action.BOARDING_MESSAGE, guest_id, owner_id, dodo)
+
+    def arrival_alert(self, host_id, guest_id):
+        self.add(Action.ARRIVAL_ALERT, host_id, guest_id)
+
+    def confirm_closed(self, host_id, remaining_guests):
+        self.add(Action.CONFIRM_CLOSED, host_id, remaining_guests)
+
+    def apology_closed(self, guest_id, host_id):
+        self.add(Action.APOLOGY_CLOSED, guest_id, host_id)
+
+def reports_results(fn):
+    @wraps(fn)
+    def decorator(*args, **kwargs):
+        builder = ResultBuilder()
+        fn(args[0], builder, *args[1:], **kwargs)
+        return builder.out
+
+    return decorator
+
+# This class should manage the queuing on the abstract idea of a social platform 
+# (discord, IRC, etc). Currently, we assume a Discord-like featureset, but we
+# should make sure to handle cases where the platform doesn't support things--eg:
+# IRC won't let you delete messages, or react to them.
+# This should map actions taken on a platform (eg: reaction) to the command the 
+# action is intended to represent (eg: queue up).
+# We'll figure this next part out later, but this class may not actually belong 
+# here as in the ideal case, the bot shouldn't have to wait for the caller to provide
+# it with a message id--which it needs to perform its duty.
+#
+# It should receive actions from the queue manager and translate them into message actions
+# that the caller can perform. 
+# eg: call_next -> host_next -> (CODE_DISPENSED) -> 
+#     return [SEND_CODE (to guest), SEND_WARNING (to next guest), SEND_NOTIFICATION (to host)]
+class SocialManager:
+    def __init__(self, queueManager):
+        self.queueManager = queueManager
+
+    @reports_results
+    def post_listing(self, output, user_id, name, price, description=None, dodo=None, tz=None, chan=None):
+        res = self.queueManager.declare(user_id, name, price, dodo, tz, description)
+        for r in res:
+            status, *params = r
+            if status == queue_manager.Action.LISTING_ACCEPTED:
+                turnip = params[0]
+                output.confirm_listing_posted(user_id)
+                output.post_listing(user_id, price, description, turnip.current_time())
+            elif status == queue_manager.Action.LISTING_UPDATED:
+                turnip = params[0]
+                output.confirm_listing_updated(user_id)
+                output.update_listing(turnip.id, turnip.current_price(), turnip.description, turnip.current_time())
+            elif status == queue_manager.Action.NOTHING:
+                output.action_rejected(params[0])
+            else:
+                logger.warning(f"""Posting the following listing resulted in a status of {status.name}. """
+                                f"""Arguments given to the listing were: {user_id} | {name} | {description} | {price} | {dodo} | {tz} | {chan} """) 
+
+    def register_message(self, user_id, message_id):
+        pass
+
+    @reports_results
+    def host_next(self, output, host_id):
+        # Currently next batch is just one person, but in the future we may accomodate more per `next`.
+        next_batch = self.queueManager.host_next(host_id)
+        for res in next_batch:
+            st = res[0]
+            if st == queue_manager.Action.POPPED_FROM_QUEUE:
+                guest, owner = res[1:]
+                output.arrival_alert(owner.id, guest.id)
+                output.boarding_message(guest.id, owner.id, owner.dodo)
+            elif st == queue_manager.Action.NOTHING:
+                output.action_rejected(res[1])
+
+    @reports_results
+    def host_close(self, output, host_id):
+        res = self.queueManager.close(host_id)
+        for r in res:
+            st = r[0]
+            if st == queue_manager.Action.NOTHING:
+                output.action_rejected(r[1])
+            if st == queue_manager.Action.QUEUE_CLOSED:
+                host, remainder = r[1:]
+                output.confirm_closed(host, remainder)
+                for guest in remainder:
+                    output.apology_closed(guest.id, host)
+
+    @reports_results
+    def reaction_added(self, output, user_id, host_id):
+        res = self.queueManager.visitor_request_queue(user_id, host_id)
+        for action, p in res:
+            if action == queue_manager.Action.ADDED_TO_QUEUE:
+                output.confirm_queued(user_id, host_id, p)
 
 class TimedActions(enum.Enum):
     CREATE_TIMER = 1 # key, length_seconds, post-timer callback
