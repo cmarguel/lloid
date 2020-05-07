@@ -121,6 +121,8 @@ def sends_messages(fn):
 
         for message in messages_to_send:
             channel, message_key = message[:2]
+            if isinstance(channel, discord.Message):
+                continue
             message_params = {}
             on_sent = None
             on_fail = None
@@ -148,72 +150,39 @@ def sends_messages(fn):
 
     return decorator
 
-# This should be used after a @commands.command statement
-# This decorator will interpret what to do after a command, based on the social_manager.Action
-# enum.
-def lloid_command(fn):
+# Similar to sends_messages, but takes a message object to edit instead of a channel to send through.
+def edits_messages(fn):
     @wraps(fn)
     async def decorator(*args, **kwargs):
-        self = args[0]
-        ctx = args[1]
+        messages_to_send = await fn(*args, **kwargs)
 
-        actions = await fn(*args, **kwargs)
-
-        for a in actions:
-            st, *p = a
-            if st == social_manager.Action.ACTION_REJECTED:
-                if len(p) <= 0:
-                    logger.error(f"The following arguments somehow resulted in a rejection with no reason: |{args}, {kwargs}|")
-                    ctx.send("Yeah, you shouldn't be seeing this message. Please tell someone to check the logs.")
-                elif p[0] in errors:
-                    await ctx.send(errors[p[0]])
-                else:
-                    logger.error(f"The following arguments resulted in a status of {p[0]}: |{args}, {kwargs}|")
-                    ctx.send("Yeah, you shouldn't be seeing this message. Please tell someone to check the logs.")
+        for message in messages_to_send:
+            msg, message_key = message[:2]
+            if not isinstance(msg, discord.Message):
                 continue
+            message_params = {}
+            on_sent = None
+            on_fail = None
+            if len(message) > 2:
+                message_params = message[2]
+            if len(message) > 3:
+                on_sent = message[3]
+            if len(message) > 4:
+                on_fail = message[4]
 
-            if st == social_manager.Action.POST_LISTING:
-                owner_id, price, description, time = p
-                await ctx.send("Okay! Please be responsible and message \"**close**\" to indicate when you've closed. "
-                "You can update the dodo code with the normal syntax. "
-                f"Messaging me \"**pause**\" will extend the cooldown timer by {queue_interval // 60} minutes each time. "
-                "You can also let the next person in and reset the timer to normal by messaging me \"**next**\".\n"
-                "Also: **Editing is now supported!** Simply send the same command with the updated info. If all you're changing is your dodo code, `host price xdodo` will suffice. Nobody will have to requeue to receive updated codes, but they'll have to reach out to you if you changed your code after they received an old one.")
-                
-                turnip = self.bot.market.get(ctx.author.id)
-                
-                desc = ""
-                if description is not None and description.strip() != "":
-                    self.bot.descriptions[ctx.author.id] = description
-                    desc = f"\n**{ctx.author.name}** adds: {description}"
-
-                msg = await self.bot.report_channel.send(f">>> **{turnip.name}** has turnips selling for **{turnip.current_price()}**. "
-                f'Local time: **{turnip.current_time().strftime("%a, %I:%M %p")}**. '
-                f"React to this message with 🦝 to be queued up for a code. {desc}")
-                await msg.add_reaction('🦝')
-                self.bot.associated_user[msg.id] = ctx.author.id
-                self.bot.associated_message[ctx.author.id] = msg
-            elif st == social_manager.Action.UPDATE_LISTING:
-                owner_id, price, desc, time = p
-                if owner_id in self.bot.associated_message:
-                    msg = self.bot.associated_message[owner_id]
-
-                    await msg.edit(content=
-                        f">>> **{ctx.author.name}** has turnips selling for **{price}**. "
-                        f'Local time: **{time.strftime("%a, %I:%M %p")}**. '
-                        f"React to this message with 🦝 to be queued up for a code. {desc}")
+            try:
+                if message_key in messages:
+                    await msg.edit(content=messages[message_key].format(**message_params))
                 else:
-                    logger.error(f"{ctx.author.name} tried to update a listing that doesn't exist anymore.")
-            elif st == social_manager.Action.CONFIRM_LISTING_UPDATED:
-                await ctx.send(messages[st])
-            elif st == social_manager.Action.CONFIRM_LISTING_POSTED:
-                pass
-            elif st == social_manager.Action.CONFIRM_QUEUED:
-                pass
-
+                    logger.warning(f"Tried to edit message, but key was not found: {message_key}")
+                if on_sent is not None:
+                    await on_sent(msg, message)
+            except Exception as err:
+                if on_fail is not None:
+                    await on_fail(err, message)
+        return messages_to_send
 
     return decorator
-
         
 class DMCommands(commands.Cog):
     def __init__(self, bot):
@@ -289,6 +258,7 @@ class DMCommands(commands.Cog):
     
     @commands.command(name='host')
     @sends_messages
+    @edits_messages
     async def host(self, ctx, price: int, dodo, tz: typing.Optional[int], *, description = None):
         # This check can probably be converted into a discord.py command check, but it's only used for one command at the moment.
         if not re.match(r'[A-HJ-NP-Y0-9]{5}', dodo, re.IGNORECASE):
@@ -312,7 +282,6 @@ class DMCommands(commands.Cog):
                 
                 desc = ""
                 if description is not None and description.strip() != "":
-                    self.bot.descriptions[ctx.author.id] = description
                     desc = f"\n**{ctx.author.name}** adds: {description}"
 
                 async def on_sent(msg, params):
@@ -331,7 +300,10 @@ class DMCommands(commands.Cog):
                     current_time = time.strftime("%a, %I:%M %p")
                     name = ctx.author.name
 
-                    await msg.edit(content=messages[social_manager.Action.POST_LISTING].format(**locals()))
+                    if desc is not None and desc.strip() != "":
+                        desc = f"\n**{ctx.author.name}** adds: {desc}"
+
+                    to_send += [(msg, social_manager.Action.POST_LISTING, locals())]
                 else:
                     logger.error(f"{ctx.author.name} tried to update a listing that doesn't exist anymore.")
 
@@ -397,7 +369,6 @@ class Lloid(commands.Bot):
             self.recently_departed = {}
             self.requested_pauses = {} # owner -> int representing number of requested pauses remaining 
             self.is_paused = {} # owner -> boolean
-            self.descriptions = {} # owner -> description
 
             queuer = queue_manager.QueueManager(self.market)
             self.social_manager = social_manager.TimedSocialManager(queuer)
@@ -478,9 +449,9 @@ class Lloid(commands.Bot):
                 logger.info(f"Sending warning to {next_in_line.name}")
                 await next_in_line.send(f"Your flight to **{task[1].name}**'s island is boarding soon! "
                 f"Please have your tickets ready, we'll be calling you forward some time in the next 0-{queue_interval_minutes} minutes!")
-                if owner in self.descriptions and self.descriptions is not None and self.descriptions[owner].strip() != "":
-                    desc = self.descriptions[owner]
-                    await next_in_line.send(f"By the way, here's the current description of the island, in case you need a review or in case it's been updated since you last viewed the listing:\n\n{desc}")
+                #if owner in self.descriptions and self.descriptions is not None and self.descriptions[owner].strip() != "":
+                #    desc = self.descriptions[owner]
+                #    await next_in_line.send(f"By the way, here's the current description of the island, in case you need a review or in case it's been updated since you last viewed the listing:\n\n{desc}")
         logger.info(f"{self.get_user(task[0]).name} has departed for {task[1].name}'s island")
         self.recently_departed[task[0]] = owner
         try:
