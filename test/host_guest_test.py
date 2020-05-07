@@ -1,6 +1,8 @@
 import unittest
 from lloidbot.queue_manager import Action, Error, Host, Guest
 
+dodo = "xxxxx"
+
 class HostGuestTest(unittest.TestCase):
     def setUp(self):
         pass
@@ -9,25 +11,25 @@ class HostGuestTest(unittest.TestCase):
         pass
 
     def test_host_equal(self):
-        h1 = Host(1)
-        h2 = Host(1)
+        h1 = Host(1, dodo)
+        h2 = Host(1, dodo)
 
         assert h1 == h2
 
     def test_host_not_equal(self):
-        h1 = Host(1)
-        h2 = Host(2)
+        h1 = Host(1, dodo)
+        h2 = Host(2, dodo)
 
         assert h1 != h2
 
     def test_host_comparison_by_id(self):
-        h1 = Host(1)
+        h1 = Host(1, dodo)
 
         assert h1 == 1
         assert h1 != 2
 
     def test_add_to_queue(self):
-        h = Host(1)
+        h = Host(1, dodo)
         assert h.addToQueue(1) == (Action.ADDED_TO_QUEUE, Guest(1,h))
         assert h.addToQueue(2) == (Action.ADDED_TO_QUEUE, Guest(2,h))
 
@@ -36,12 +38,12 @@ class HostGuestTest(unittest.TestCase):
         assert 3 not in h.queue
 
     def test_wont_add_if_already_queued(self):
-        h = Host(1)
+        h = Host(1, dodo)
         assert h.addToQueue(1) == (Action.ADDED_TO_QUEUE, Guest(1,h))
         assert h.addToQueue(1) == (Error.ALREADY_QUEUED, Guest(1,h))
 
     def test_pop_from_host_queue(self):
-        h = Host(1)
+        h = Host(1, dodo)
         assert h.addToQueue(1) == (Action.ADDED_TO_QUEUE, Guest(1,h))
         assert h.addToQueue(2) == (Action.ADDED_TO_QUEUE, Guest(2,h))
 

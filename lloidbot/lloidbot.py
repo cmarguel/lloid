@@ -47,6 +47,16 @@ messages = {
         "Also, a lot of people might be ahead of you, so **go in, do the one thing you're there for, and leave**. "
         "If you're there to sell turnips, don't look for Saharah or shop at Nook's! And please, **DO NOT USE the minus (-) button to exit!** "
         "There are reports that exiting via minus button can result in people getting booted without their loot getting saved, and even save corruption. Use the airport!",
+    social_manager.Action.BOARDING_MESSAGE:
+        "⭐⭐⭐ **NOW BOARDING** ⭐⭐⭐"
+
+        "Hope you enjoy your trip to **{owner_name}**'s island! Be polite, observe "
+        "social distancing, leave a tip if you can, and **please be responsible and "
+        "message me \"done\" when you've left (unless the island already has a lot "
+        "of visitors inside, in which case... don't bother)**. Doing this lets the next "
+        "visitor in. The Dodo code is **{dodo}**.",
+    social_manager.Action.ARRIVAL_ALERT:
+        "Sure thing, friend! Next in line is **{guest_name}**; let's prepare to give them a nice warm welcome!"
 }
 
 errors = {
@@ -62,7 +72,11 @@ errors = {
         "You'll need to tell us how much the turnips are at least.",
     # look into this, it may have the same error values as something else
     queue_manager.Error.ALREADY_QUEUED:
-        "You seem to already be in line somewhere.",
+        "You seem to already be in line somewhere, friend.",
+    queue_manager.Error.QUEUE_EMPTY:
+        "Nobody's in the queue, chum!",
+    queue_manager.Error.NO_SUCH_QUEUE:
+        "Sorry bud, there must be some kind of mistake--I don't remember you opening up your island!",
     turnips.Status.DODO_INCORRECT_FORMAT: 
         "This dodo code appears to be invalid. Please make sure to check the length and characters used."
 }
@@ -228,18 +242,26 @@ class DMCommands(commands.Cog):
             await ctx.send("Thanks for the heads-up! Letting the next person in now.")
 
     @commands.command()
+    @sends_messages
     async def next(self, ctx):
-        if self.bot.market.has_listing(ctx.message.author.id):
-            await ctx.send("Okay, letting the next person in.")
-            self.bot.requested_pauses[ctx.message.author.id] = 0
-            if ctx.message.author.id in self.bot.sleepers:
-                self.bot.sleepers[ctx.message.author.id].cancel()
+        messages = []
+        res = self.bot.social_manager.host_next(ctx.author.id)
+        for r in res:
+            st = r[0]
+            if st == social_manager.Action.BOARDING_MESSAGE:
+                guest_id, host_id, dodo = r[1:]
+                guest = self.bot.get_user(guest_id)
+                owner_name = self.bot.get_user(host_id).name
+
+                messages += [(guest, st, locals())]
+            elif st == social_manager.Action.ARRIVAL_ALERT:
+                host_id, guest_id = r[1:]
+                guest_name = self.bot.get_user(guest_id).name
+
+                messages += [(ctx, st, locals())]
             else:
-                owner_name = self.bot.get_user(ctx.message.author.id).name
-                logger.debug(f"{owner_name} tried sending in the next one, but there were no timers to cancel.")
-            return
-        else:
-            await ctx.send("Nice try.")
+                messages += [(ctx, r[1])]
+        return messages
     
     @commands.command()
     async def pause(self, ctx):

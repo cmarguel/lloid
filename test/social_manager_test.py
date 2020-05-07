@@ -146,3 +146,28 @@ class TestSocialManager(unittest.TestCase):
         assert host == alice.id
         assert len(ahead) == 1
         assert 1 in ahead
+
+    @freezegun.freeze_time(tuesday_morning)
+    def test_host_next(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+        self.manager.post_listing(bella.id, bella.name, 150, standard_description, bella.dodo, bella.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, bella.id)
+        self.manager.reaction_added(3, alice.id)
+
+        res = self.manager.host_next(alice.id)
+        assert (Action.ARRIVAL_ALERT, alice.id, 1) in res
+        assert (Action.BOARDING_MESSAGE, 1, alice.id, alice.dodo) in res
+
+        res = self.manager.host_next(alice.id)
+        assert (Action.ARRIVAL_ALERT, alice.id, 3) in res
+        assert (Action.BOARDING_MESSAGE, 3, alice.id, alice.dodo) in res
+        
+        res = self.manager.host_next(bella.id)
+        assert (Action.ARRIVAL_ALERT, bella.id, 2) in res
+        assert (Action.BOARDING_MESSAGE, 2, bella.id, bella.dodo) in res, res
+        
+        res = self.manager.host_next(bella.id)
+        assert (Action.ACTION_REJECTED, queue_manager.Error.QUEUE_EMPTY)
+        

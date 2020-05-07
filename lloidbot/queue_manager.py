@@ -29,7 +29,7 @@ class QueueManager:
             if preexisted:
                 act = Action.LISTING_UPDATED
             else:
-                self.hosts[idx] = Host(idx)
+                self.hosts[idx] = Host(idx, dodo)
             return [(act, self.market.get(idx))]
         elif status in (Status.TIMEZONE_REQUIRED, Status.DODO_REQUIRED):
             return [(Action.NOTHING, status)]
@@ -69,7 +69,7 @@ class QueueManager:
         guest, e = self.hosts[owner].pop()
         if e == Error.QUEUE_EMPTY:
             return [(Action.NOTHING, Error.QUEUE_EMPTY)]
-        return [(Action.POPPED_FROM_QUEUE, guest, owner)]
+        return [(Action.POPPED_FROM_QUEUE, guest, self.hosts[owner])]
     
 class Map1to1:
     def __init__(self):
@@ -129,8 +129,9 @@ class Error(enum.Enum):
     NO_SUCH_QUEUE = 3
 
 class Host:
-    def __init__(self, owner_id):
+    def __init__(self, owner_id, dodo):
         self.id = owner_id
+        self.dodo = dodo
         self.capacity = 1
         self.queue = [] # Queue of guest objects
         self.outgoing_queue = [] # Best guess at who is currently on the island 

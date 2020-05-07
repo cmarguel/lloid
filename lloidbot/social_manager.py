@@ -54,6 +54,21 @@ class SocialManager:
     def register_message(self, user_id, message_id):
         pass
 
+    def host_next(self, host_id):
+        # Currently next batch is just one person, but in the future we may accomodate more per `next`.
+        to_send = []
+        next_batch = self.queueManager.host_next(host_id)
+        for res in next_batch:
+            st = res[0]
+            if st == queue_manager.Action.POPPED_FROM_QUEUE:
+                guest, owner = res[1:]
+                to_send += [(Action.ARRIVAL_ALERT, owner.id, guest.id)]
+                to_send += [(Action.BOARDING_MESSAGE, guest.id, owner.id, owner.dodo)]
+            elif st == queue_manager.Action.NOTHING:
+                to_send += [(Action.ACTION_REJECTED, res[1])]
+        return to_send
+
+
     def reaction_added(self, user_id, host_id):
         out = []
         res = self.queueManager.visitor_request_queue(user_id, host_id)
@@ -73,11 +88,15 @@ class SocialManager:
 # even as a no-op, if it's deemed too annoying to get such updates on IRC.
 class Action(enum.Enum):
     ACTION_REJECTED = 0 # reason
-    CONFIRM_LISTING_POSTED = 1 # owner_id
-    POST_LISTING = 2 # owner id, price, description, turnip.current_time()
-    CONFIRM_LISTING_UPDATED = 3 # owner id
-    UPDATE_LISTING = 4 # owner_id, price, description, turnip.current_time()
-    CONFIRM_QUEUED = 5 # guest_id, owner_id, queueAhead
+    INFO = 1 # requested info
+    CONFIRM_LISTING_POSTED = 2 # owner_id
+    POST_LISTING = 3 # owner id, price, description, turnip.current_time()
+    CONFIRM_LISTING_UPDATED = 4 # owner id
+    UPDATE_LISTING = 5 # owner_id, price, description, turnip.current_time()
+    CONFIRM_QUEUED = 6 # guest_id, owner_id, queueAhead
+    WARNING_MESSAGE = 7 # guest_id, owner_id
+    BOARDING_MESSAGE = 8 # guest_id, owner_id, dodo
+    ARRIVAL_ALERT = 9
 
 class TimedActions(enum.Enum):
     CREATE_TIMER = 1 # key, length_seconds, post-timer callback
