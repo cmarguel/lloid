@@ -56,7 +56,11 @@ messages = {
         "of visitors inside, in which case... don't bother)**. Doing this lets the next "
         "visitor in. The Dodo code is **{dodo}**.",
     social_manager.Action.ARRIVAL_ALERT:
-        "Sure thing, friend! Next in line is **{guest_name}**; let's prepare to give them a nice warm welcome!"
+        "Sure thing, friend! Next in line is **{guest_name}**; let's prepare to give them a nice warm welcome!",
+    social_manager.Action.CONFIRM_CLOSED:
+        "Thanks for responsibly closing your doors, pal! I'll send my apologies to the **{num_queued}** people left in line!",
+    social_manager.Action.APOLOGY_CLOSED:
+        "Hey pal, my apologies, but it looks like **{owner_name}** closed up shop!"
 }
 
 errors = {
@@ -207,20 +211,23 @@ class DMCommands(commands.Cog):
         return not ctx.message.guild
 
     @commands.command()
+    @sends_messages
     async def close(self, ctx):
-        if ctx.author.id not in self.bot.market.queue.queues:
-            await ctx.send("You don't seem to have a market open.")
-            return
-        await ctx.send("Thanks for responsibly closing your doors! I'll give my condolences to the people still in line, if any.")
-        denied, status = self.bot.market.close(ctx.author.id)
-        if status == turnips.Status.SUCCESS:
-            for d in denied:
-                await self.bot.get_user(d).send("Apologies, but it looks like the person you were waiting for closed up.")
-            await self.bot.associated_message[ctx.author.id].delete()
-            del self.bot.associated_user[self.bot.associated_message[ctx.author.id].id]
-            del self.bot.associated_message[ctx.author.id]
-            if ctx.author.id in self.bot.requested_pauses:
-                del self.bot.requested_pauses[ctx.author.id]
+        res = self.bot.social_manager.host_close(ctx.author.id)
+        messages = []
+        for r in res:
+            st = r[0]
+            if st == social_manager.Action.ACTION_REJECTED:
+                return [(ctx, r[1])]
+            elif st == social_manager.Action.CONFIRM_CLOSED:
+                host_id, remaining = r[1:]
+                num_queued = len(remaining)
+                messages += [(ctx, st, locals())]
+            elif st == social_manager.Action.APOLOGY_CLOSED:
+                guest_id, host_id = r[1:]
+                owner_name = self.bot.get_user(host_id).name
+                messages += [(self.bot.get_user(guest_id), st, locals())]
+        return messages
 
     @commands.command()
     async def done(self, ctx):

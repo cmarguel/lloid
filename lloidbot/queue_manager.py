@@ -72,6 +72,16 @@ class QueueManager:
         if e == Error.QUEUE_EMPTY:
             return [(Action.NOTHING, Error.QUEUE_EMPTY)]
         return [(Action.POPPED_FROM_QUEUE, guest, self.hosts[owner])]
+
+    def close(self, owner):
+        if owner not in self.hosts:
+            return [(Action.NOTHING, Error.NO_SUCH_QUEUE)]
+        remainder = self.hosts[owner].queue
+        del self.hosts[owner]
+        for guest in remainder:
+            del self.guests[guest.id]
+        return [(Action.QUEUE_CLOSED, owner, remainder)]
+
     
 class Map1to1:
     def __init__(self):
@@ -123,6 +133,7 @@ class Action(enum.Enum): # A list of actions that were taken by the queue manage
     DISPENSING_BLOCKED = 8 # owner, [queued guests]
     DISPENSING_REACTIVATED = 9 # owner, [queued guests]
     POPPED_FROM_QUEUE = 10 # guest id, owner id -- this differs from REMOVED as the latter implies that it's an abnormal situation (eg: visitor leaving line or getting kicked)
+    QUEUE_CLOSED = 11 # owner id, [remaining guests]
 
 class Error(enum.Enum):
     UNKNOWN = 0

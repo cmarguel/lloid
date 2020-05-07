@@ -171,3 +171,23 @@ class TestSocialManager(unittest.TestCase):
         res = self.manager.host_next(bella.id)
         assert (Action.ACTION_REJECTED, queue_manager.Error.QUEUE_EMPTY)
         
+    @freezegun.freeze_time(tuesday_morning)
+    def test_host_close(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, alice.id)
+        self.manager.reaction_added(3, alice.id)
+        self.manager.host_next(alice.id)
+
+        res = self.manager.host_close(alice.id)
+        assert len(res) == 3
+        assert (Action.CONFIRM_CLOSED, alice.id, [2, 3]) in res
+        assert (Action.APOLOGY_CLOSED, 2, alice.id) in res
+        assert (Action.APOLOGY_CLOSED, 3, alice.id) in res
+
+    @freezegun.freeze_time(tuesday_morning)
+    def test_host_close_nonexistent(self):
+        res = self.manager.host_close(alice.id)
+        assert len(res) == 1
+        assert (Action.ACTION_REJECTED, queue_manager.Error.NO_SUCH_QUEUE) in res, res
+

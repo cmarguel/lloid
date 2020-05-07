@@ -68,6 +68,19 @@ class SocialManager:
                 to_send += [(Action.ACTION_REJECTED, res[1])]
         return to_send
 
+    def host_close(self, host_id):
+        res = self.queueManager.close(host_id)
+        out = []
+        for r in res:
+            st = r[0]
+            if st == queue_manager.Action.NOTHING:
+                return [(Action.ACTION_REJECTED, r[1])]
+            if st == queue_manager.Action.QUEUE_CLOSED:
+                host, remainder = r[1:]
+                out += [(Action.CONFIRM_CLOSED, host, remainder)]
+                for guest in remainder:
+                    out += [(Action.APOLOGY_CLOSED, guest.id, host)]
+        return out
 
     def reaction_added(self, user_id, host_id):
         out = []
@@ -96,7 +109,9 @@ class Action(enum.Enum):
     CONFIRM_QUEUED = 6 # guest_id, owner_id, queueAhead
     WARNING_MESSAGE = 7 # guest_id, owner_id
     BOARDING_MESSAGE = 8 # guest_id, owner_id, dodo
-    ARRIVAL_ALERT = 9
+    ARRIVAL_ALERT = 9 # host id, guest id
+    CONFIRM_CLOSED = 10 # host id, [remaining guests]
+    APOLOGY_CLOSED = 11 # guest_id, host id
 
 class TimedActions(enum.Enum):
     CREATE_TIMER = 1 # key, length_seconds, post-timer callback

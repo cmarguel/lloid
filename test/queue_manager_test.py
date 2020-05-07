@@ -8,10 +8,10 @@ import freezegun
 standard_description = 'standard description'
 updated_description = 'updated description'
 
-alice = turnips.Turnip('global', 1, 'Alice', 'ALICE', 0, standard_description, None, [None]*14)
-bella = turnips.Turnip('nookmart', 2, 'Bella', 'BELLA', 5, standard_description, None, [None]*14)
-cally = turnips.Turnip('nookmart', 3, 'Cally', 'CALLY', 6, None, None, [None]*14)
-deena = turnips.Turnip('nookmart', 4, 'Deena', 'DEENA', 7, None, None, [None]*14)
+alice = turnips.Turnip('global', 100, 'Alice', 'ALICE', 0, standard_description, None, [None]*14)
+bella = turnips.Turnip('nookmart', 200, 'Bella', 'BELLA', 5, standard_description, None, [None]*14)
+cally = turnips.Turnip('nookmart', 300, 'Cally', 'CALLY', 6, None, None, [None]*14)
+deena = turnips.Turnip('nookmart', 400, 'Deena', 'DEENA', 7, None, None, [None]*14)
 
 # March 24, 2020 - Tuesday
 tuesday_morning = datetime(2020, 3, 24, 10, 20)
@@ -199,6 +199,18 @@ class TestQueueManager(unittest.TestCase):
         r, e = res[0]
         assert r == Action.NOTHING
         assert e == Error.NO_SUCH_QUEUE, e
+
+    def test_close_queue(self):
+        self.manager.declare(alice.id, alice.name, 150, alice.dodo, alice.gmtoffset)
+        self.manager.visitor_request_queue(1, alice.id)
+        self.manager.visitor_request_queue(2, alice.id)
+        self.manager.visitor_request_queue(3, alice.id)
+        self.manager.host_next(alice.id)
+
+        assert alice.id in self.manager.hosts
+        res = self.manager.close(alice.id)
+        assert (Action.QUEUE_CLOSED, alice.id, [2, 3]) in res
+        assert alice.id not in self.manager.hosts
 
 
 if __name__ == '__main__':
