@@ -48,7 +48,7 @@ messages = {
         "If you're there to sell turnips, don't look for Saharah or shop at Nook's! And please, **DO NOT USE the minus (-) button to exit!** "
         "There are reports that exiting via minus button can result in people getting booted without their loot getting saved, and even save corruption. Use the airport!",
     social_manager.Action.BOARDING_MESSAGE:
-        "⭐⭐⭐ **NOW BOARDING** ⭐⭐⭐"
+        "\n\n⭐⭐⭐ **NOW BOARDING** ⭐⭐⭐\n\n"
 
         "Hope you enjoy your trip to **{owner_name}**'s island! Be polite, observe "
         "social distancing, leave a tip if you can, and **please be responsible and "
@@ -261,6 +261,12 @@ class DMCommands(commands.Cog):
                 owner_name = self.bot.get_user(host_id).name
 
                 messages += [(guest, st, locals())]
+
+                try:
+                    await self.bot.associated_message[host_id].remove_reaction('🦝', guest)
+                except Exception as ex:
+                    logger.warning("Couldn't remove reaction; error: %s" % ex)
+
             elif st == social_manager.Action.ARRIVAL_ALERT:
                 host_id, guest_id = r[1:]
                 guest_name = self.bot.get_user(guest_id).name
