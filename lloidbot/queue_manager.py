@@ -28,6 +28,8 @@ class QueueManager:
             act = Action.LISTING_ACCEPTED
             if preexisted:
                 act = Action.LISTING_UPDATED
+                if dodo is not None:
+                    self.hosts[idx].dodo = dodo
             else:
                 self.hosts[idx] = Host(idx, dodo)
             return [(act, self.market.get(idx))]
