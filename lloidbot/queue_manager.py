@@ -1,6 +1,7 @@
 from lloidbot.turnips import Status
 import logging
 import enum
+from enum import auto
 
 logger = logging.getLogger('lloid')
 
@@ -121,25 +122,26 @@ class Map1to1:
 class Action(enum.Enum): # A list of actions that were taken by the queue manager upon receiving an event
     # Each one is accompanied by supplementary information which the caller will receive;
     # this will facilitate the construction of user-friendly messages on the caller's side.
-    UNKNOWN_ERROR = -1
-    NOTHING = 0 # reason
-    INFO = 1 # supplementary parameters depend on information requested
-    ADDED_TO_QUEUE = 2 # guest id, owner id, [guests ahead]
-    REMOVED_FROM_QUEUE = 3 # guest id, owner id
-    CODE_DISPENSED = 4 # guest id, owner id, dodo code, [remaining guests]
-    LISTING_ACCEPTED = 5 # turnip (an instance of Turnip) 
-    LISTING_UPDATED = 6 # turnip, price, [queued guests]
-    LISTING_CLOSED = 7 # owner, [queued guests]
-    DISPENSING_BLOCKED = 8 # owner, [queued guests]
-    DISPENSING_REACTIVATED = 9 # owner, [queued guests]
-    POPPED_FROM_QUEUE = 10 # guest id, owner id -- this differs from REMOVED as the latter implies that it's an abnormal situation (eg: visitor leaving line or getting kicked)
-    QUEUE_CLOSED = 11 # owner id, [remaining guests]
+    UNKNOWN_ERROR          = auto()
+    NOTHING                = auto() # reason
+    INFO                   = auto() # supplementary parameters depend on information requested
+    ADDED_TO_QUEUE         = auto() # guest id, owner id, [guests ahead]
+    REMOVED_FROM_QUEUE     = auto() # guest id, owner id
+    CODE_DISPENSED         = auto() # guest id, owner id, dodo code, [remaining guests]
+    LISTING_ACCEPTED       = auto() # turnip (an instance of Turnip) 
+    LISTING_UPDATED        = auto() # turnip, price, [queued guests]
+    LISTING_CLOSED         = auto() # owner, [queued guests]
+    DISPENSING_BLOCKED     = auto() # owner, [queued guests]
+    DISPENSING_REACTIVATED = auto() # owner, [queued guests]
+    POPPED_FROM_QUEUE      = auto() # guest id, owner id -- this differs from REMOVED as the latter implies that it's an abnormal situation (eg: visitor leaving line or getting kicked)
+    QUEUE_CLOSED           = auto() # owner id, [remaining guests]
+    SIGNUPS_BLOCKED        = auto()
 
 class Error(enum.Enum):
-    UNKNOWN = 0
-    ALREADY_QUEUED = 1
-    QUEUE_EMPTY = 2
-    NO_SUCH_QUEUE = 3
+    UNKNOWN        = auto()
+    ALREADY_QUEUED = auto()
+    QUEUE_EMPTY    = auto()
+    NO_SUCH_QUEUE  = auto()
 
 class Host:
     def __init__(self, owner_id, dodo):
@@ -148,6 +150,9 @@ class Host:
         self.capacity = 1
         self.queue = [] # Queue of guest objects
         self.outgoing_queue = [] # Best guess at who is currently on the island 
+
+        self.accepting_signups = True
+        self.dispensing_codes = True
 
     def __eq__(self, h):
         if isinstance(h, Host):

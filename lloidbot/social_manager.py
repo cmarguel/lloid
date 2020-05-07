@@ -2,6 +2,7 @@ from lloidbot.turnips import Status
 from lloidbot import queue_manager
 import logging
 import enum
+from enum import auto
 from functools import wraps
 import asyncio
 
@@ -23,18 +24,18 @@ logger = logging.getLogger('lloid')
 # IRC-specific caller might implement as a message posted by the bot somewhere--or 
 # even as a no-op, if it's deemed too annoying to get such updates on IRC.
 class Action(enum.Enum):
-    ACTION_REJECTED = 0 # reason
-    INFO = 1 # requested info
-    CONFIRM_LISTING_POSTED = 2 # owner_id
-    POST_LISTING = 3 # owner id, price, description, turnip.current_time()
-    CONFIRM_LISTING_UPDATED = 4 # owner id
-    UPDATE_LISTING = 5 # owner_id, price, description, turnip.current_time()
-    CONFIRM_QUEUED = 6 # guest_id, owner_id, queueAhead
-    WARNING_MESSAGE = 7 # guest_id, owner_id
-    BOARDING_MESSAGE = 8 # guest_id, owner_id, dodo
-    ARRIVAL_ALERT = 9 # host id, guest id
-    CONFIRM_CLOSED = 10 # host id, [remaining guests]
-    APOLOGY_CLOSED = 11 # guest_id, host id
+    ACTION_REJECTED         = auto() # reason
+    INFO                    = auto() # requested info
+    CONFIRM_LISTING_POSTED  = auto() # owner_id
+    POST_LISTING            = auto() # owner id, price, description, turnip.current_time()
+    CONFIRM_LISTING_UPDATED = auto() # owner id
+    UPDATE_LISTING          = auto() # owner_id, price, description, turnip.current_time()
+    CONFIRM_QUEUED          = auto() # guest_id, owner_id, queueAhead
+    WARNING_MESSAGE         = auto() # guest_id, owner_id
+    BOARDING_MESSAGE        = auto() # guest_id, owner_id, dodo
+    ARRIVAL_ALERT           = auto() # host id, guest id
+    CONFIRM_CLOSED          = auto() # host id, [remaining guests]
+    APOLOGY_CLOSED          = auto() # guest_id, host id
 
 # This might seem redundant, but the intention here is for me to not screw up the payload,
 # by forcing the interpreter to catch when I forgot or included too many arguments.
@@ -164,8 +165,8 @@ class SocialManager:
                 output.confirm_queued(user_id, host_id, p)
 
 class TimedActions(enum.Enum):
-    CREATE_TIMER = 1 # key, length_seconds, post-timer callback
-    CANCEL_TIMER = 2 # key
+    CREATE_TIMER = auto() # key, length_seconds, post-timer callback
+    CANCEL_TIMER = auto() # key
 
 class TimedSocialManager(SocialManager):
     def __init__(self, queueManager):
