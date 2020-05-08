@@ -159,8 +159,10 @@ class TestSocialManager(unittest.TestCase):
         res = self.manager.host_next(alice.id)
         assert (Action.ARRIVAL_ALERT, alice.id, 1) in res, res
         assert (Action.BOARDING_MESSAGE, 1, alice.id, alice.dodo) in res
+        assert (Action.WARNING_MESSAGE, 3, alice.id) in res, res
 
         res = self.manager.host_next(alice.id)
+        assert len(res) == 2
         assert (Action.ARRIVAL_ALERT, alice.id, 3) in res
         assert (Action.BOARDING_MESSAGE, 3, alice.id, alice.dodo) in res
         

@@ -46,6 +46,17 @@ class QueueManager:
     def visitor_done(self, guest):
         pass
 
+    def get_queue_for(self, host_id):
+        if host_id not in self.hosts:
+            return (Action.NOTHING, Error.NO_SUCH_QUEUE)
+        return (Action.INFO, self.hosts[host_id].queue[:])
+
+    # This gets a turnip, which is how the market object represents a host.
+    # Once the refactoring is done, the next objective is to obsolete the Turnip
+    # class, and with it, this method. We can just use the Host object, hopefully.
+    def get_turnip(self, host_id):
+        return self.market.get(host_id)
+
     def visitor_request_queue(self, guest, owner):
         if guest in self.guests and self.guests[guest].status == Guest.WAITING:
             return [(Action.NOTHING, Error.ALREADY_QUEUED)]
@@ -173,6 +184,11 @@ class Host:
         guest = Guest(guest_id, self)
         self.queue += [guest]
         return Action.ADDED_TO_QUEUE, guest
+
+    def peek(self):
+        if len(self.queue) <= 0:
+            return None, Error.QUEUE_EMPTY
+        return self.queue[0], None
 
     def pop(self):
         if len(self.queue) <= 0:

@@ -55,6 +55,9 @@ messages = {
         "message me \"done\" when you've left (unless the island already has a lot "
         "of visitors inside, in which case... don't bother)**. Doing this lets the next "
         "visitor in. The Dodo code is **{dodo}**.",
+    social_manager.Action.WARNING_MESSAGE:
+        "\n\n⚠️⚠️⚠️\n"
+        "Your flight to {owner_name}'s island is boarding soon! Please have your tickets ready, we'll be calling you forward some time in the next 0-{max_wait} minutes!\n{addendum}",
     social_manager.Action.ARRIVAL_ALERT:
         "Sure thing, friend! Next in line is **{guest_name}**; let's prepare to give them a nice warm welcome!",
     social_manager.Action.CONFIRM_CLOSED:
@@ -266,12 +269,21 @@ class DMCommands(commands.Cog):
                     await self.bot.associated_message[host_id].remove_reaction('🦝', guest)
                 except Exception as ex:
                     logger.warning("Couldn't remove reaction; error: %s" % ex)
-
             elif st == social_manager.Action.ARRIVAL_ALERT:
                 host_id, guest_id = r[1:]
                 guest_name = self.bot.get_user(guest_id).name
 
                 messages += [(ctx, st, locals())]
+            elif st == social_manager.Action.WARNING_MESSAGE:
+                guest_id, host_id = r[1:]
+                max_wait = queue_interval_minutes
+                owner_name = self.bot.get_user(host_id).name
+
+                addendum = ""
+                turnip = self.bot.social_manager.get_turnip(host_id)
+                if turnip.description is not None:
+                    addendum = f"By the way, here's the current description of the island, in case you need a review or in case it's been updated since you last viewed the listing: {turnip.description}",
+                messages += [(self.bot.get_user(guest_id), st, locals())]
             else:
                 messages += [(ctx, r[1])]
         return messages

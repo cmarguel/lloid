@@ -141,8 +141,16 @@ class SocialManager:
                 guest, owner = res[1:]
                 output.arrival_alert(owner.id, guest.id)
                 output.boarding_message(guest.id, owner.id, owner.dodo)
+
+                st, q = self.queueManager.get_queue_for(host_id)
+                if st == queue_manager.Action.INFO and len(q) > 0:
+                    output.warning_message(q[0].id, owner.id)
             elif st == queue_manager.Action.NOTHING:
                 output.action_rejected(res[1])
+    
+    # This will eventually be obsoleted. See comment in queueManager.get_turnip
+    def get_turnip(self, host_id):
+        return self.queueManager.get_turnip(owner.id)
 
     @reports_results
     def host_close(self, output, host_id):
