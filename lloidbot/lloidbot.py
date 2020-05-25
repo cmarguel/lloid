@@ -63,7 +63,13 @@ messages = {
     social_manager.Action.CONFIRM_CLOSED:
         "Thanks for responsibly closing your doors, pal! I'll send my apologies to the **{num_queued}** people left in line!",
     social_manager.Action.APOLOGY_CLOSED:
-        "Hey pal, my apologies, but it looks like **{owner_name}** closed up shop!"
+        "Hey pal, my apologies, but it looks like **{owner_name}** closed up shop!",
+    social_manager.Action.THANKS_DONE:
+        "Thanks for the heads-up, bud! I'll let the next person know!",
+    social_manager.Action.THANKS_BUT_PAUSED:
+        "Thanks for the heads-up, bud! The queue is actually paused at the moment, so the host will be the one to let the next person in.",
+    social_manager.Action.THANKS_BUT_CLOSED:
+        "The island is actually closed now, but thanks for being responsible, friend!",
 }
 
 errors = {

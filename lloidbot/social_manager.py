@@ -36,6 +36,9 @@ class Action(enum.Enum):
     ARRIVAL_ALERT           = auto() # host id, guest id
     CONFIRM_CLOSED          = auto() # host id, [remaining guests]
     APOLOGY_CLOSED          = auto() # guest_id, host id
+    THANKS_DONE             = auto() # guest_id
+    THANKS_BUT_PAUSED       = auto() # guest_id
+    THANKS_BUT_CLOSED       = auto() # guest_id
 
 # This might seem redundant, but the intention here is for me to not screw up the payload,
 # by forcing the interpreter to catch when I forgot or included too many arguments.
@@ -81,6 +84,15 @@ class ResultBuilder:
 
     def apology_closed(self, guest_id, host_id):
         self.add(Action.APOLOGY_CLOSED, guest_id, host_id)
+
+    def thanks_done(self, guest_id):
+        self.add(Action.THANKS_DONE, guest_id)
+
+    def thanks_but_closed(self, guest_id):
+        self.add(Action.THANKS_BUT_CLOSED, guest_id)
+
+    def thanks_but_paused(self, guest_id):
+        self.add(Action.THANKS_BUT_PAUSED, guest_id)
 
 def reports_results(fn):
     @wraps(fn)
@@ -132,9 +144,28 @@ class SocialManager:
         pass
 
     @reports_results
+    def guest_done(self, output, guest_id):
+        res = self.queueManager.visitor_done(guest_id)
+
+        popped = next((r for r in res if r[0] == queue_manager.Action.POPPED_FROM_QUEUE), None)
+        if popped is not None:
+            _, _, host = popped
+            self.process_guests(output, res, host.id)
+            output.thanks_done(guest_id)
+        else:
+            output.thanks_but_closed(guest_id)
+
+    @reports_results
     def host_next(self, output, host_id):
-        # Currently next batch is just one person, but in the future we may accomodate more per `next`.
         next_batch = self.queueManager.host_next(host_id)
+        failed = next((r for r in next_batch if r[0] == queue_manager.Action.NOTHING), None)
+        if failed is not None:
+            output.action_rejected(failed[1])
+        else:
+            self.process_guests(output, next_batch, host_id)
+
+    def process_guests(self, output, next_batch, host_id):
+        # Currently next batch is just one person, but in the future we may accomodate more per `next`.
         for res in next_batch:
             st = res[0]
             if st == queue_manager.Action.POPPED_FROM_QUEUE:
@@ -145,12 +176,10 @@ class SocialManager:
                 st, q = self.queueManager.get_queue_for(host_id)
                 if st == queue_manager.Action.INFO and len(q) > 0:
                     output.warning_message(q[0].id, owner.id)
-            elif st == queue_manager.Action.NOTHING:
-                output.action_rejected(res[1])
     
     # This will eventually be obsoleted. See comment in queueManager.get_turnip
     def get_turnip(self, host_id):
-        return self.queueManager.get_turnip(owner.id)
+        return self.queueManager.get_turnip(host_id)
 
     @reports_results
     def host_close(self, output, host_id):
@@ -199,8 +228,8 @@ class TimedSocialManager(SocialManager):
     def host_requested_next(self, owner_id):
         pass
 
-    def reaction_added(self, user_id, host_id):
-        res = super().reaction_added(user_id, host_id)
+    def reaction_added(self, output, user_id, host_id):
+        res = super().reaction_added(output, user_id, host_id)
 
         return res
 

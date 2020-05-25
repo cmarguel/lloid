@@ -193,3 +193,43 @@ class TestSocialManager(unittest.TestCase):
         assert len(res) == 1
         assert (Action.ACTION_REJECTED, queue_manager.Error.NO_SUCH_QUEUE) in res, res
 
+    @freezegun.freeze_time(tuesday_morning)
+    def test_guest_done(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+        self.manager.post_listing(bella.id, bella.name, 150, standard_description, bella.dodo, bella.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(3, alice.id)
+
+        self.manager.reaction_added(2, bella.id)
+        self.manager.reaction_added(4, bella.id)
+
+        self.manager.host_next(alice.id)
+        self.manager.host_next(bella.id)
+
+        res = self.manager.guest_done(1)
+        assert len(res) == 3, res
+        assert (Action.THANKS_DONE, 1) in res
+        assert (Action.ARRIVAL_ALERT, alice.id, 3) in res
+        assert (Action.BOARDING_MESSAGE, 3, alice.id, alice.dodo) in res
+        
+        res = self.manager.guest_done(2)
+        assert len(res) == 3, res
+        assert (Action.THANKS_DONE, 2) in res
+        assert (Action.ARRIVAL_ALERT, bella.id, 4) in res
+        assert (Action.BOARDING_MESSAGE, 4, bella.id, bella.dodo) in res, res
+        
+    @freezegun.freeze_time(tuesday_morning)
+    def test_guest_done_but_island_closed(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, alice.id)
+
+        self.manager.host_next(alice.id)
+        self.manager.host_close(alice.id)
+
+        res = self.manager.guest_done(1)
+        assert len(res) == 1
+        assert (Action.THANKS_BUT_CLOSED, 1) in res
+        

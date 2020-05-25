@@ -44,7 +44,8 @@ class QueueManager:
     # to decide. So a timeout would most likely be handled the same way within the queue
     # manager.
     def visitor_done(self, guest):
-        pass
+        owner = self.guests[guest].host
+        return self.host_next(owner)
 
     def get_queue_for(self, host_id):
         if host_id not in self.hosts:
