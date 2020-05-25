@@ -45,7 +45,12 @@ class QueueManager:
     # manager.
     def visitor_done(self, guest):
         owner = self.guests[guest].host
-        return self.host_next(owner)
+        del(self.guests[guest])
+        if guest in owner.queue:
+            owner.queue.remove(guest)
+        if guest in owner.outgoing_queue:
+            owner.outgoing_queue.remove(guest)
+        return self.host_next(owner.id)
 
     def get_queue_for(self, host_id):
         if host_id not in self.hosts:
@@ -67,7 +72,7 @@ class QueueManager:
         guests_ahead = self.hosts[owner].queue[:]
         status, guest = self.hosts[owner].addToQueue(guest)
         if status == Action.ADDED_TO_QUEUE:
-            self.guests[guest.id] = Guest(guest, owner)
+            self.guests[guest.id] = guest
             return [(Action.ADDED_TO_QUEUE, guests_ahead)]
         else:
             return [(Action.NOTHING, status)]

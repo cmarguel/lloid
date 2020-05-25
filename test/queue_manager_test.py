@@ -1,7 +1,7 @@
 import unittest
 import sqlite3
 from lloidbot import turnips
-from lloidbot.queue_manager import QueueManager, Action, Error
+from lloidbot.queue_manager import QueueManager, Action, Error, Guest, Host
 from datetime import datetime
 import freezegun
 
@@ -212,6 +212,26 @@ class TestQueueManager(unittest.TestCase):
         assert (Action.QUEUE_CLOSED, alice.id, [2, 3]) in res
         assert alice.id not in self.manager.hosts
 
+    def test_visitor_status(self):
+        self.manager.declare(alice.id, alice.name, 150, alice.dodo, alice.gmtoffset)
+        self.manager.visitor_request_queue(1, alice.id)
+        host = self.manager.hosts[alice.id]
+
+        assert self.manager.guests[1].status == Guest.WAITING
+        assert 1 in host.queue
+        assert 1 not in host.outgoing_queue
+
+        self.manager.host_next(alice.id)
+
+        assert self.manager.guests[1].status == Guest.VISITING, self.manager.guests[1].status
+        assert 1 not in host.queue
+        assert 1 in host.outgoing_queue
+
+        self.manager.visitor_done(1)
+
+        assert 1 not in self.manager.guests
+        assert 1 not in host.queue
+        assert 1 not in host.outgoing_queue
 
 if __name__ == '__main__':
     unittest.main() 
