@@ -233,5 +233,32 @@ class TestQueueManager(unittest.TestCase):
         assert 1 not in host.queue
         assert 1 not in host.outgoing_queue
 
+    def test_host_pause(self):
+        self.manager.declare(alice.id, alice.name, 150, alice.dodo, alice.gmtoffset)
+        self.manager.visitor_request_queue(1, alice.id)
+        self.manager.visitor_request_queue(2, alice.id)
+
+        self.manager.host_next(alice.id)
+        res = self.manager.host_pause(alice.id)
+        assert (Action.DISPENSING_BLOCKED, [Guest(2, alice.id)]) in res
+
+        res = self.manager.visitor_done(1)
+        assert (Action.NOTHING, Error.QUEUE_PAUSED) in res
+        assert len(self.manager.hosts[alice.id].queue) == 1
+
+    def test_host_resume(self):
+        self.manager.declare(alice.id, alice.name, 150, alice.dodo, alice.gmtoffset)
+        self.manager.visitor_request_queue(1, alice.id)
+        self.manager.visitor_request_queue(2, alice.id)
+
+        self.manager.host_next(alice.id)
+        self.manager.host_pause(alice.id)
+
+        self.manager.visitor_done(1)
+
+        res = self.manager.host_next(alice.id)
+        assert (Action.DISPENSING_REACTIVATED, [2]) in res, res
+        assert (Action.POPPED_FROM_QUEUE, 2, alice.id) in res
+        
 if __name__ == '__main__':
     unittest.main() 

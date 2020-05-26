@@ -50,7 +50,16 @@ class QueueManager:
             owner.queue.remove(guest)
         if guest in owner.outgoing_queue:
             owner.outgoing_queue.remove(guest)
+
+        if not owner.dispensing_codes:
+            return [(Action.NOTHING, Error.QUEUE_PAUSED)]
+
         return self.host_next(owner.id)
+
+    def _queue(self, host_id):
+        if host_id not in self.hosts:
+            return None
+        return self.hosts[host_id].queue
 
     def get_queue_for(self, host_id):
         if host_id not in self.hosts:
@@ -80,16 +89,30 @@ class QueueManager:
     def visitor_request_dequeue(self, guest, owner):
         pass
 
-    def host_pause(self):
-        pass
+    def host_pause(self, host_id):
+        if host_id not in self.hosts:
+            return [(Action.NOTHING, Error.NO_SUCH_QUEUE)]
+        host = self.hosts[host_id]
+        host.dispensing_codes = False
+
+        return [(Action.DISPENSING_BLOCKED, host.queue)]
 
     def host_next(self, owner):
         if owner not in self.hosts:
             return [(Action.NOTHING, Error.NO_SUCH_QUEUE)]
-        guest, e = self.hosts[owner].pop()
+
+        out = []
+        host = self.hosts[owner]
+        if not host.dispensing_codes:
+            out += [(Action.DISPENSING_REACTIVATED, host.queue[:])]
+
+        guest, e = host.pop()
         if e == Error.QUEUE_EMPTY:
-            return [(Action.NOTHING, Error.QUEUE_EMPTY)]
-        return [(Action.POPPED_FROM_QUEUE, guest, self.hosts[owner])]
+            out += [(Action.NOTHING, Error.QUEUE_EMPTY)]
+        else:
+            out += [(Action.POPPED_FROM_QUEUE, guest, self.hosts[owner])]
+        
+        return out
 
     def close(self, owner):
         if owner not in self.hosts:
@@ -157,6 +180,8 @@ class Action(enum.Enum): # A list of actions that were taken by the queue manage
 class Error(enum.Enum):
     UNKNOWN        = auto()
     ALREADY_QUEUED = auto()
+    QUEUE_PAUSED   = auto()
+    SIGNUPS_PAUSED = auto()
     QUEUE_EMPTY    = auto()
     NO_SUCH_QUEUE  = auto()
 

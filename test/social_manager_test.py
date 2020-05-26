@@ -171,7 +171,7 @@ class TestSocialManager(unittest.TestCase):
         assert (Action.BOARDING_MESSAGE, 2, bella.id, bella.dodo) in res, res
         
         res = self.manager.host_next(bella.id)
-        assert (Action.ACTION_REJECTED, queue_manager.Error.QUEUE_EMPTY)
+        assert (Action.ACTION_REJECTED, queue_manager.Error.QUEUE_EMPTY) in res
         
     @freezegun.freeze_time(tuesday_morning)
     def test_host_close(self):
@@ -230,6 +230,48 @@ class TestSocialManager(unittest.TestCase):
         self.manager.host_close(alice.id)
 
         res = self.manager.guest_done(1)
-        assert len(res) == 1
+        assert len(res) == 1, res
         assert (Action.THANKS_BUT_CLOSED, 1) in res
         
+    @freezegun.freeze_time(tuesday_morning)
+    def test_guest_done_but_not_yet_on_island(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, alice.id)
+
+        self.manager.host_next(alice.id)
+
+        res = self.manager.guest_done(2)
+        assert (Action.INVALID_DONE, 2, alice.id) in res, res
+
+    @freezegun.freeze_time(tuesday_morning)
+    def test_host_pause(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, alice.id)
+
+        self.manager.host_next(alice.id)
+        res = self.manager.host_pause(alice.id)
+        assert (Action.CONFIRM_PAUSED, alice.id, [2]) in res, res
+
+        res = self.manager.guest_done(1)
+        assert (Action.THANKS_BUT_PAUSED, 1) in res
+
+    @freezegun.freeze_time(tuesday_morning)
+    def test_host_resume(self):
+        self.manager.post_listing(alice.id, alice.name, 150, standard_description, alice.dodo, alice.gmtoffset, standard_description)
+
+        self.manager.reaction_added(1, alice.id)
+        self.manager.reaction_added(2, alice.id)
+
+        self.manager.host_next(alice.id)
+        res = self.manager.host_pause(alice.id)
+        assert (Action.CONFIRM_PAUSED, alice.id, [2]) in res, res
+
+        res = self.manager.host_next(alice.id)
+        assert (Action.CONFIRM_RESUMED, alice.id, [2]) in res, res
+        assert (Action.ARRIVAL_ALERT, alice.id, 2) in res
+        assert (Action.BOARDING_MESSAGE, 2, alice.id, alice.dodo) in res, res
+

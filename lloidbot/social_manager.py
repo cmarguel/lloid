@@ -34,8 +34,11 @@ class Action(enum.Enum):
     WARNING_MESSAGE         = auto() # guest_id, owner_id
     BOARDING_MESSAGE        = auto() # guest_id, owner_id, dodo
     ARRIVAL_ALERT           = auto() # host id, guest id
+    CONFIRM_PAUSED          = auto() # host id, [remaining guests]
+    CONFIRM_RESUMED         = auto() # host id, [remaining guests]
     CONFIRM_CLOSED          = auto() # host id, [remaining guests]
     APOLOGY_CLOSED          = auto() # guest_id, host id
+    INVALID_DONE            = auto() # guest_id, host id # This is for when they say done, but are not in a state where `done` makes sense; eg: they are still in line.
     THANKS_DONE             = auto() # guest_id
     THANKS_BUT_PAUSED       = auto() # guest_id
     THANKS_BUT_CLOSED       = auto() # guest_id
@@ -94,6 +97,15 @@ class ResultBuilder:
     def thanks_but_paused(self, guest_id):
         self.add(Action.THANKS_BUT_PAUSED, guest_id)
 
+    def invalid_done(self, guest_id, host_id):
+        self.add(Action.INVALID_DONE, guest_id, host_id)
+
+    def confirm_paused(self, host_id, guests):
+        self.add(Action.CONFIRM_PAUSED, host_id, guests)
+
+    def confirm_resumed(self, host_id, guests):
+        self.add(Action.CONFIRM_RESUMED, host_id, guests)
+
 def reports_results(fn):
     @wraps(fn)
     def decorator(*args, **kwargs):
@@ -146,6 +158,11 @@ class SocialManager:
     @reports_results
     def guest_done(self, output, guest_id):
         res = self.queueManager.visitor_done(guest_id)
+        error = next((r for r in res if r[0] == queue_manager.Action.NOTHING), None)
+        if error is not None:
+            _, err = error
+            if err == queue_manager.Error.QUEUE_PAUSED:
+                output.thanks_but_paused(guest_id)
 
         popped = next((r for r in res if r[0] == queue_manager.Action.POPPED_FROM_QUEUE), None)
         if popped is not None:
@@ -158,6 +175,11 @@ class SocialManager:
     @reports_results
     def host_next(self, output, host_id):
         next_batch = self.queueManager.host_next(host_id)
+        resumed = next((r for r in next_batch if r[0] == queue_manager.Action.DISPENSING_REACTIVATED), None)
+        if resumed is not None:
+            queue = resumed[1]
+            output.confirm_resumed(host_id, queue)
+
         failed = next((r for r in next_batch if r[0] == queue_manager.Action.NOTHING), None)
         if failed is not None:
             output.action_rejected(failed[1])
@@ -200,6 +222,12 @@ class SocialManager:
         for action, p in res:
             if action == queue_manager.Action.ADDED_TO_QUEUE:
                 output.confirm_queued(user_id, host_id, p)
+
+    @reports_results
+    def host_pause(self, output, host_id):
+        r = self.queueManager.host_pause(host_id)
+        if r[0][0] == queue_manager.Action.DISPENSING_BLOCKED:
+            output.confirm_paused(host_id, self.queueManager._queue(host_id))
 
 class TimedActions(enum.Enum):
     CREATE_TIMER = auto() # key, length_seconds, post-timer callback
