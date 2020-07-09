@@ -270,7 +270,7 @@ Explanation:
             logger.info(f"Initialized. Deleted {num_del} old messages.")
         logger.info(f"Sample data to verify data integrity: {self.associated_user}")
 
-    async def on_raw_reaction_add(self, payload):
+    async def on_raw_reaction_add(self, payload, allow_new=None):
         channel = await self.fetch_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         user = await self.fetch_user(payload.user_id)
@@ -287,7 +287,7 @@ Explanation:
                 self.market.forfeit(user.id)
                 await message.remove_reaction('🦝', user)
 
-    async def on_raw_reaction_remove(self, payload):
+    async def on_raw_reaction_remove(self, payload, allow_new=None):
         if payload.emoji.name == '🦝' and payload.message_id in self.associated_user and payload.user_id in self.market.queue.requesters:
             user = await self.fetch_user(payload.user_id)
             logger.debug(f"{user.name} unreacted with raccoon")
