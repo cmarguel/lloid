@@ -271,7 +271,7 @@ Explanation:
         logger.info(f"Sample data to verify data integrity: {self.associated_user}")
 
     async def on_raw_reaction_add(self, payload, allow_new=None):
-        channel = await self.fetch_channel(payload.channel_id)
+        channel = self.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         user = await self.fetch_user(payload.user_id)
 
